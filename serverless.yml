@@ -1,0 +1,85 @@
+service: restapidemo
+frameworkVersion: '2'
+
+plugins:
+  - serverless-reqvalidator-plugin
+  - serverless-aws-documentation
+
+provider:
+  name: aws
+  runtime: python3.8
+  lambdaHashingVersion: 20201221
+  profile: serverless
+  region: eu-central-1
+  stage: dev
+  logs:
+    restApi:
+      role: arn:aws:iam::197198971644:role/apigateway-logs-role
+     
+functions:
+  calculate_profit:
+    handler: api/calculate_profit.handler
+    events:
+      - http:
+          path: currency/profit
+          method: post
+          authorizer: aws_iam
+          integration: lambda
+          request:
+            template:
+              application/json: '$input.json("$")'
+          response:
+            headers:
+              Content-Type: "'application/json'"
+            template: $input.path('$')
+            statusCodes:
+              400:
+                pattern: 	'.*.\[BadRequest\].*'
+                template: $input.path('$.errorMessage')
+              500:
+                pattern: 	'.*.\[InternalServerError\].*'
+                template: $input.path('$.errorMessage')
+
+          documentation:
+            summary: "Calculate profit on past cryptocurrency trades"
+            description: "Calculates profit given a crypto ticker, amount and year in past"
+            requestModels:
+              "application/json": ProfitCalculatorRequest
+          reqValidatorName: onlyBody
+          
+resources:
+  Resources:
+    onlyBody:  
+      Type: "AWS::ApiGateway::RequestValidator"
+      Properties:
+        Name: 'only-body'
+        RestApiId: 
+          Ref: ApiGatewayRestApi
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+       
+custom:
+  documentation:
+    models:
+      - name: ProfitCalculatorRequest
+        contentType: "application/json"
+        schema:
+          required: 
+            - query
+            - amount
+            - year
+          properties:
+            query:
+              type: string
+            amount:
+              type: number
+            year:
+              type: number
+
+package:
+  patterns:
+    - '!event_test.json'
+    - '!package-lock.json'
+    - '!run_tests.py'
+    - '!node_modules/**'
+    - '!tests/**'
